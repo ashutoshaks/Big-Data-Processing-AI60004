@@ -32,50 +32,33 @@ for dir in os.listdir(data_path):
 # print(len(classes))
 # print(len(files))
 
-ngram_dict = {}
-lock = {}
-for cls in classes:
-    ngram_dict[cls] = {}
-    lock[cls] = threading.Lock()
+ngram_parts = [None] * num_threads
 
 
 def get_ngrams(words, n):
-    if len(words) < n:
-        return []
-
-    ngrams = []
+    # ngrams = []
     # for i in range(len(words) - n + 1):
     #     ngrams.append(tuple(words[i: i + n]))
-    # return ngrams
+    if len(words) < n:
+        return []
+    ngrams = []
 
-    curr_ngram = []
+    curr_ngram = ""
     for i in range(n):
-        curr_ngram.append(words[i])
-    ngrams.append(tuple(curr_ngram))
+        curr_ngram += words[i] + " "
+    ngrams.append(curr_ngram[:-1])
     for i in range(n, len(words)):
-        curr_ngram.pop(0)
-        curr_ngram.append(words[i])
-        ngrams.append(tuple(curr_ngram))
-
-    # if len(words) < n:
-    #     return []
-    # ngrams = []
-    # curr_ngram = []
-    # for i in range(n):
-    #     curr_ngram.append(words[i])
-    # ngrams.append(' '.join(curr_ngram))
-    # # for i in range(len(words) - n + 1):
-    # for i in range(n, len(words)):
-    #     # ngrams.append(tuple(words[i: i + n]))
-    #     curr_ngram.pop(0)
-    #     curr_ngram.append(words[i])
-    #     ngrams.append(' '.join(curr_ngram))
-
+        prev_len = len(words[i - n])
+        curr_ngram = curr_ngram[prev_len + 1:]
+        curr_ngram += words[i] + " "
+        ngrams.append(curr_ngram[:-1])
+        
     return ngrams
 
 
 def task(id, start, end):
-    print(f"Thread {id} started")
+    print(f"Thread {id + 1} started")
+    ngram_parts[id] = {}
     for i in range(start, end + 1):
         file = files[i]
         with open(file, 'r', encoding='utf-8', errors='replace') as f:
@@ -86,19 +69,15 @@ def task(id, start, end):
             # print(ngrams)
             cls = os.path.basename(os.path.dirname(
                 os.path.join(data_path, file)))
-            # lock[cls].acquire()
             for ngram in ngrams:
                 # if ngram[0] == 'ax' and ngram[1] == 'ax' and ngram[2] == 'ax' and ngram[3] == 'ax' and ngram[4] == 'ax':
                 #     print(cls)
                 #     print(file)
-                lock[cls].acquire()
-                if ngram in ngram_dict[cls]:
-                    ngram_dict[cls][ngram] += 1
+                if (ngram, cls) in ngram_parts[id]:
+                    ngram_parts[id][(ngram, cls)] += 1
                 else:
-                    ngram_dict[cls][ngram] = 1
-                lock[cls].release()
-            # lock[cls].release()
-    print(f"Thread {id} finished")
+                    ngram_parts[id][(ngram, cls)] = 1
+    print(f"Thread {id + 1} finished")
 
 
 threads = []
@@ -107,7 +86,7 @@ for i in range(num_threads):
     start = i * chunk_size
     end = (i + 1) * chunk_size - 1
     # print(start, end)
-    t = threading.Thread(target=task, args=(i + 1, start, end))
+    t = threading.Thread(target=task, args=(i, start, end))
     threads.append(t)
     t.start()
 
@@ -116,31 +95,42 @@ for t in threads:
 
 t2 = time.time()
 
-# for key, value in ngram_dict.items():
-#     print(key, len(value))
-    # print(value)
+ngram_cnts = {}
+for i in range(num_threads):
+    for key, value in ngram_parts[i].items():
+        if key[0] in ngram_cnts:
+            if key[1] in ngram_cnts[key[0]]:
+                ngram_cnts[key[0]][key[1]] += value
+            else:
+                ngram_cnts[key[0]][key[1]] = value
+        else:
+            ngram_cnts[key[0]] = {}
+            ngram_cnts[key[0]][key[1]] = value
+
+t3 = time.time()
+
 
 # score = count of ngram in a class / no. of documents in the class
 
 # (26.988)
 ngram_scores = {}
 ngram_class = {}
-for key, value in ngram_dict.items():
-    for ngram, count in value.items():
+for ngram, cnts in ngram_cnts.items():
+    for cls, cnt in cnts.items():
+        score = cnt / num_docs[cls]
         if ngram in ngram_scores:
-            if ngram_scores[ngram] < count / num_docs[key]:
-                ngram_class[ngram] = key
-                ngram_scores[ngram] = count / num_docs[key]
-            # ngram_scores[ngram] = max(ngram_scores[ngram], count / num_docs[key])
+            if score > ngram_scores[ngram]:
+                ngram_scores[ngram] = score
+                ngram_class[ngram] = cls
         else:
-            ngram_class[ngram] = key
-            ngram_scores[ngram] = count / num_docs[key]
+            ngram_scores[ngram] = score
+            ngram_class[ngram] = cls
 
 # # get top k ngrams
 # top_k_ngrams = sorted(ngram_scores.items(),
 #                       key=lambda x: x[1], reverse=True)[:k]
 
-t3 = time.time()
+t4 = time.time()
 
 # using heapq (16.987)
 ngs = [(-score, ngram) for ngram, score in ngram_scores.items()]
@@ -154,8 +144,9 @@ for score, ngram in top_k_ngrams:
 print(top_k_ngrams)
 print(top_k_cls)
 
-t4 = time.time()
+t5 = time.time()
 
-print(f"Time taken for preprocessing: {t2 - t1}")
-print(f"Time taken for scoring: {t3 - t2}")
-print(f"Time taken for getting top k: {t4 - t3}")
+print(f"Time taken for reading files: {t2 - t1}")
+print(f"Time taken for counting ngrams: {t3 - t2}")
+print(f"Time taken for scoring ngrams: {t4 - t3}")
+print(f"Time taken for getting top k ngrams: {t5 - t4}")

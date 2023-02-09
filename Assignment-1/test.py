@@ -40,34 +40,34 @@ for cls in classes:
 
 
 def get_ngrams(words, n):
-    if len(words) < n:
-        return []
-
-    ngrams = []
+    # ngrams = []
     # for i in range(len(words) - n + 1):
-    #     ngrams.append(tuple(words[i: i + n]))
+    #     # get n-grams as strings
+    #     ngrams.append(' '.join(words[i: i + n]))
+    #     # ngrams.append(tuple(words[i: i + n]))
     # return ngrams
 
-    curr_ngram = []
-    for i in range(n):
-        curr_ngram.append(words[i])
-    ngrams.append(tuple(curr_ngram))
-    for i in range(n, len(words)):
-        curr_ngram.pop(0)
-        curr_ngram.append(words[i])
-        ngrams.append(tuple(curr_ngram))
+    if len(words) < n:
+        return []
+    ngrams = []
 
-    # if len(words) < n:
-    #     return []
-    # ngrams = []
+    curr_ngram = ""
+    for i in range(n):
+        curr_ngram += words[i] + " "
+    ngrams.append(curr_ngram[:-1])
+    for i in range(n, len(words)):
+        prev_len = len(words[i - n])
+        curr_ngram = curr_ngram[prev_len + 1:]
+        curr_ngram += words[i] + " "
+        ngrams.append(curr_ngram[:-1])
+
     # curr_ngram = []
     # for i in range(n):
     #     curr_ngram.append(words[i])
     # ngrams.append(' '.join(curr_ngram))
     # # for i in range(len(words) - n + 1):
     # for i in range(n, len(words)):
-    #     # ngrams.append(tuple(words[i: i + n]))
-    #     curr_ngram.pop(0)
+    #     curr_ngram = curr_ngram[1:]
     #     curr_ngram.append(words[i])
     #     ngrams.append(' '.join(curr_ngram))
 
@@ -86,7 +86,7 @@ def task(id, start, end):
             # print(ngrams)
             cls = os.path.basename(os.path.dirname(
                 os.path.join(data_path, file)))
-            # lock[cls].acquire()
+
             for ngram in ngrams:
                 # if ngram[0] == 'ax' and ngram[1] == 'ax' and ngram[2] == 'ax' and ngram[3] == 'ax' and ngram[4] == 'ax':
                 #     print(cls)
@@ -97,7 +97,6 @@ def task(id, start, end):
                 else:
                     ngram_dict[cls][ngram] = 1
                 lock[cls].release()
-            # lock[cls].release()
     print(f"Thread {id} finished")
 
 
