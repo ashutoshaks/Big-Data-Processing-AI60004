@@ -1,3 +1,4 @@
 **/.vscode
 *.zip
 *.tar.gz
+**/data
